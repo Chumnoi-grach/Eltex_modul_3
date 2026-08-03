@@ -1,4 +1,4 @@
 gcc main.c -o main
 
-./main Makefile -p fds
-./main Makefile
+./main -p pier main.c Makefile 
+#./main main.c 
