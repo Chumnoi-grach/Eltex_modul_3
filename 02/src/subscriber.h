@@ -7,4 +7,5 @@ void init_subscriber(Subscriber *sub, pid_t pid);
 
 int add_topic(Subscriber *sub, Topic *topic);
 
+void init_topic(Topic *topic, char *buf);
 #endif

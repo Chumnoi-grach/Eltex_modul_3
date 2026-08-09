@@ -27,7 +27,7 @@ void handle_sigint(int sig) {
 }
 
 int publisher_process(int msqid, Messege mes) {
-    size_t read_bytes = msgsnd(msqid, &mes, (int)(sizeof(Messege) - sizeof(long)), 0);
+    size_t read_bytes = msgsnd(msqid, &mes, (int)(sizeof(Messege) - sizeof(long)), IPC_NOWAIT);
     if (read_bytes == -1) {
         perror("msgsnd");
     }
@@ -53,9 +53,10 @@ int main() {
         signal(SIGINT, handle_sigint);
         while (running) {
             Messege mes;
+            Topic topic;
             int timing = 1 + rand() % 5;
             sleep(timing);
-            generate_messege(&mes, "send", 1);
+            generate_messege(&mes, "send", 1, &topic);
             printf("%s\n", mes.text);
             publisher_process(msqid, mes);
         }

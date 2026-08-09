@@ -31,15 +31,6 @@ void init_broker(Broker *broker, int msqid) {
     broker->queue_id = msqid;
 }
 
-void init_topic(Topic *topic, char *buf) {
-    if (topic == NULL || buf == NULL){
-        return;
-    }
-    strncpy(topic->topic, buf, sizeof(topic->topic) - 1);
-    topic->topic[sizeof(topic->topic) - 1] = '\0';
-    topic->next = NULL;
-}
-
 int add_subscrider(Broker *broker, Subscriber *subscriber) {
     if (subscriber == NULL || broker == NULL) {
         return -1;
@@ -204,13 +195,17 @@ int broker_process(Broker *broker) {
             Topic *topic_in_list = sub_in_list->head;
             while (topic_in_list != NULL) {
                 if (strcmp(topic_in_list->topic, controlmes.topic) == 0) {
-                    rcv_mes.mtype = sub_in_list->pid;
-                    if (msgsnd(broker->queue_id, &rcv_mes, sizeof(Messege) - sizeof(long), 0) == -1) {
+                    Messege snd_mes;
+                    memset(&snd_mes, 0, sizeof(Messege));
+                    strcpy(snd_mes.text, rcv_mes.text);
+                    snd_mes.mtype = sub_in_list->pid;
+
+                    if (msgsnd(broker->queue_id, &snd_mes, sizeof(Messege) - sizeof(long), 0) == -1) {
                         perror("msgsnd подписчику");
                         return(-4);
                     }
                     else {
-                        printf("send: отправили сообщение подписчику от %d к %ld\nТема: %s\n", controlmes.sender_pid, controlmes.mtype, controlmes.topic);
+                        printf("send: отправили сообщение подписчику от %d к %ld\nТема: %s\n", controlmes.sender_pid, snd_mes.mtype, controlmes.topic);
                     }
                     break;
                 }
@@ -231,7 +226,7 @@ int broker_process(Broker *broker) {
             init_subscriber(new_subscriber, controlmes.sender_pid);
             add_subscrider(broker, new_subscriber);
         }
-        printf("subscribe: subscriber %d получил сообщение по теме %s\n", controlmes.sender_pid, controlmes.topic);
+        //printf("subscribe: subscriber %d получил сообщение по теме %s\n", controlmes.sender_pid, controlmes.topic);
         Subscriber *sub = get_subscriber_by_broker(broker, controlmes.sender_pid);
         
         Topic *topic;
@@ -241,7 +236,7 @@ int broker_process(Broker *broker) {
         }
         init_topic(topic, controlmes.topic);
         if (add_topic(sub, topic) == 0) {
-            printf("subscribe: broker для subscriber %d добавил новую тему: %s\n", controlmes.sender_pid, controlmes.topic);
+            //printf("subscribe: broker для subscriber %d добавил новую тему: %s\n", controlmes.sender_pid, controlmes.topic);
         }
     }
     else if (strcmp(controlmes.command, "unsubscribe") == 0) {
@@ -282,7 +277,7 @@ void send_sigint_to_all(Broker *broker) {
     Publisher *pub_in_list = broker->pub_head;
     while (pub_in_list != NULL) {
         if (kill(pub_in_list->pid, SIGINT) == 0) {
-            printf("Сигнал отправлен успешно подписчику с PID: %d\n", pub_in_list->pid);
+            printf("Сигнал отправлен успешно публикатору с PID: %d\n", pub_in_list->pid);
         }
         else {
             perror("Ошибка отправки сигнала");
@@ -290,6 +285,7 @@ void send_sigint_to_all(Broker *broker) {
         pub_in_list = pub_in_list->next;
     }
 
+    sleep(1);
 
 
     int timeout_seconds = 5;
@@ -355,7 +351,9 @@ int main() {
         while (running) {
             broker_process(&broker);
         }
+        
         send_sigint_to_all(&broker);
+        
         if (msgctl(msqid, IPC_RMID, NULL) == -1) {
             perror("Ошибка: не удалось удалить очередь");
             exit(-2);

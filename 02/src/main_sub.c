@@ -10,6 +10,7 @@
 #include "subscriber.h"
 #include "publisher.h"
 #include <fcntl.h>
+#include <time.h>
 
 
 #define _POSIX_C_SOURCE 200809L
@@ -23,19 +24,36 @@ void handle_sigint(int sig) {
     running = 0;
     //exit(0);
 }
-int init_sub_for_broker(int msqid, Messege* mes) {
-    for (int n = rand() % 10; n--; n > 0){
-        if (generate_messege(mes, "subscribe", 1) == -1) {
+int init_sub_for_broker(int msqid, Subscriber *sub) {
+    Messege mes;
+    int n = rand() % 10+5;
+    printf("генерируем %d топиков\n", n);
+    for (int i = 0; i < n; i++){
+        Topic *topic = malloc(sizeof(Topic));
+        if (generate_messege(&mes, "subscribe", 1, topic) == -1) {
             perror("generate_messege");
             return -1;
         }
-    
-        size_t write_bytes = msgsnd(msqid, mes, (int)(sizeof(Messege) - sizeof(long)), 0);
+        Topic *current = sub->head;
+        int skip = 0;
+        while (current != NULL) {
+            if (strcmp(current->topic, topic->topic) == 0) {
+                skip = 1;
+            }
+            current = current->next;
+        }
+        if (skip) continue;
+        size_t write_bytes = msgsnd(msqid, &mes, (int)(sizeof(Messege) - sizeof(long)), 0);
         if (write_bytes == -1) {
             perror("msgsnd");
+            return -1;
         }
-        printf("Отправил сообщение типа subscribe\n");
+        
+        add_topic(sub, topic);
+
+        printf("Отправил сообщение типа subscribe с темой: %s\n", topic->topic);
     }
+    return 0;
 }
 int subscriber_process(int msqid, Subscriber *sub) {
     Messege rcv_mes;
@@ -43,7 +61,11 @@ int subscriber_process(int msqid, Subscriber *sub) {
     char text[MAX_TEXT_SIZE];
     size_t read_bytes = msgrcv(msqid, &rcv_mes, (int)(sizeof(Messege) - sizeof(long)), getpid(), 0);
     if (read_bytes == -1) {
-        perror("msgsnd");
+        if (errno == EINTR) {
+            printf("Прерывание msgrcv сигналом SIGINT\n");
+            return 1;
+        }
+        perror("msgrcv");
     }
 
     printf("Получил сообщение\n");
@@ -90,12 +112,75 @@ int subscriber_process(int msqid, Subscriber *sub) {
         controlmes.mtype,
         controlmes.sender_pid,
         controlmes.topic);
+    
+    // Topic *topic_in_list = sub->head;
+    // while (topic_in_list != NULL) {
+    //     if (strcmp(topic_in_list->topic, controlmes.topic) == 0) {
+    //         Topic *topic = malloc(sizeof(Topic));
+    //         if (topic == NULL) {
+    //             perror("malloc");
+    //         }
+    //         init_topic(topic, controlmes.topic);
+    //         // if (add_topic(sub, topic) == 0) {
+    //         //     printf("subscribe: broker для subscriber %d добавил новую тему: %s\n", controlmes.sender_pid, controlmes.topic);
+    //         // }
+    //     }
+    //     topic_in_list = topic_in_list->next;
+    // }
+}
+
+int generate_unsub_messege(Messege *mes, long mtype, Topic *topic) {
+    char text[MAX_TEXT_SIZE];
+    strcpy(text, "unsubscribe,");
+
+    char pid_buf[20];
+    sprintf(pid_buf, "%d,", getpid());
+    strcat(text, pid_buf);
+
+    // char topic_buf[MAX_TOPIC_SIZE];
+    // strcpy(topic_buf, topic->topic);
+    strcat(text, topic->topic);
+    strcat(text, "\n");
+    char text_buf[MAX_TEXT_SIZE];
+    // if (get_str_by_file(TEXTS_FILE_NAME, target_num_str, text_buf) == 0) {
+    //     return -2;
+    // }
+    // strcat(text, text_buf);
+    strcpy(mes->text, text);
+    //strcpy(mes->topic, topic_buf);
+    mes->mtype = mtype;
+    //strcpy(topic->topic, topic_buf);
+
+    return 0;
+}
+
+int unsub_for_broker(int msqid, Subscriber *sub) {
+    Topic *topic_in_list = sub->head;
+    Messege mes;
+    while (topic_in_list != NULL) {
+        if (generate_unsub_messege(&mes, 1, topic_in_list) == -1) {
+            perror("generate_messege");
+            return -1;
+        }
+        size_t write_bytes = msgsnd(msqid, &mes, (int)(sizeof(Messege) - sizeof(long)), 0);
+        if (write_bytes == -1) {
+            if (errno == EIDRM) {
+                printf("Очередь уже удалена, пропускаем отписку для %s\n", topic_in_list->topic);
+                return 0;
+            }
+            perror("msgsnd в unsub");
+            return -1;
+        }
+        printf("Отправил unsubscribe сообщение %s broker\n", topic_in_list->topic);
+        topic_in_list = topic_in_list->next;
+    }
 }
 
 
 int main() {
     key_t key = ftok(QUEUE_NAME, 'A');
     int msqid = msgget(key, 0666);
+    srand(time(NULL));
     if (msqid == -1) {
         if (errno == ENOENT) {
             perror("Ошибка: очереди нет");
@@ -111,11 +196,17 @@ int main() {
         Messege mes;
         Subscriber subscriber;
         
-        
-        init_sub_for_broker(msqid, &mes);
+        init_sub_for_broker(msqid, &subscriber);
         while (running) {
             int timing = 1 + rand() % 5;
-            subscriber_process(msqid, &subscriber);
+            int result = subscriber_process(msqid, &subscriber);
+            if (result == -1) {
+                printf("Ввыход из цикла\n");
+                break;
+            }
+            usleep(10000);
         }
-    } 
+
+        unsub_for_broker(msqid, &subscriber);
+    }
 }

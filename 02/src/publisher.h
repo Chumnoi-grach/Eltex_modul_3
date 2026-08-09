@@ -8,6 +8,6 @@ void init_publisher(Publisher *pub, pid_t pid);
 
 int get_str_by_file(char *file, int num_srt, char *buf);
 
-int generate_messege(Messege *mes, char *command, long mtype);
+int generate_messege(Messege *mes, char *command, long mtype, Topic *topic);
 
 #endif

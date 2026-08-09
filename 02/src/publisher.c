@@ -42,7 +42,7 @@ int get_str_by_file(char *file, int num_srt, char *buf) {
     return topic_index;
 }
 
-int generate_messege(Messege *mes, char *command, long mtype) {
+int generate_messege(Messege *mes, char *command, long mtype, Topic *topic) {
     char text[MAX_TEXT_SIZE];
     strcpy(text, command);
     strcat(text, ",");
@@ -66,6 +66,7 @@ int generate_messege(Messege *mes, char *command, long mtype) {
     strcpy(mes->text, text);
     //strcpy(mes->topic, topic_buf);
     mes->mtype = mtype;
+    strcpy(topic->topic, topic_buf);
 
     return 0;
 }

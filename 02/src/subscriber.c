@@ -1,6 +1,7 @@
 #include "types.h"
 #include "subscriber.h"
 #include <stdlib.h>
+#include <string.h>
 
 void init_subscriber(Subscriber *sub, pid_t pid) {
     sub->pid = pid;
@@ -23,4 +24,12 @@ int add_topic(Subscriber *sub, Topic *topic) {
         sub->tail = topic;
         return 0;
     }
+}
+void init_topic(Topic *topic, char *buf) {
+    if (topic == NULL || buf == NULL){
+        return;
+    }
+    strncpy(topic->topic, buf, sizeof(topic->topic) - 1);
+    topic->topic[sizeof(topic->topic) - 1] = '\0';
+    topic->next = NULL;
 }
