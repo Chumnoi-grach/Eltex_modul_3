@@ -17,8 +17,8 @@
 
 
 #define SHM_SIZE 1024
-#define SHM_KEY 2
-#define SEM_KEY 2
+#define SHM_KEY 3
+#define SEM_KEY 3
 #define MAX_VAL -2147483648
 #define MIN_VAL 2147483647
 
@@ -137,6 +137,7 @@ int main(int argc, char *argv[]) {
             else if (size == 0 && next_offset != 0) {
                 printf("Consumer: блок с адресом %d уже обработан, пропускаю\n", current_offset);
                 current_offset = next_offset;
+                sem_unlock(semid);
                 continue;
             }
             else if (size != 0) {
@@ -213,7 +214,10 @@ int main(int argc, char *argv[]) {
                 sem_lock(semid);
                 is_readed = (ptr[0] == 0);
                 sem_unlock(semid);
-                sleep(1);
+                struct timespec ts;
+                ts.tv_sec = 0; 
+                ts.tv_nsec = 100 * 1000000; 
+                nanosleep(&ts, NULL);
             }
             
         }
